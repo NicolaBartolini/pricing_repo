@@ -133,7 +133,7 @@ class GBM:
         self.sigma = default_inputs['sigma'] # vol 
         self.delta = default_inputs['delta'] # continuous dividend yield
         
-    def set_drif(self, mu):
+    def set_drift(self, mu):
         self.mu = mu
     
     def set_sigma(self, sigma):
