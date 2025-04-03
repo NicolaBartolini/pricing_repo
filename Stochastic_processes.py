@@ -180,11 +180,15 @@ class GBM:
         d1 = (np.log(S0 / K) + (self.mu - self.delta + 0.5 * self.sigma ** 2) * T) / (self.sigma * np.sqrt(T));
         d2 = (np.log(S0 / K) + (self.mu -self.delta - 0.5 * self.sigma ** 2) * T) / (self.sigma * np.sqrt(T));
         
-        if d1==0 or d2==0:
-            return np.nan
-        else:
-            return S0 *np.exp(-self.delta * (T-t)) * norm.cdf(d1, 0.0, 1.0) - K * np.exp(-self.mu * T) * norm.cdf(d2, 0.0, 1.0);
+        # try:
+        #     if d1==0 or d2==0:
+        #         return np.nan
+        #     else:
+        #         S0 *np.exp(-self.delta * (T-t)) * norm.cdf(d1, 0.0, 1.0) - K * np.exp(-self.mu * T) * norm.cdf(d2, 0.0, 1.0)
+        # except:
+        #     return S0 *np.exp(-self.delta * (T-t)) * norm.cdf(d1, 0.0, 1.0) - K * np.exp(-self.mu * T) * norm.cdf(d2, 0.0, 1.0);
         
+        return S0 *np.exp(-self.delta * (T-t)) * norm.cdf(d1, 0.0, 1.0) - K * np.exp(-self.mu * T) * norm.cdf(d2, 0.0, 1.0);
     
     def cos_pricing(self, S0, K, T, typology, N=32):
         
@@ -227,7 +231,12 @@ class GBM:
         # K = strike price;
         # T = option maturity;
         
-        return self.BS_call_price(S0, K, T, t) - S0 + K*np.exp(-self.mu*(T-t)) + S0 * (1 - np.exp(-self.delta*(T-t)))
+        d1 = (np.log(S0 / K) + (self.mu - self.delta + 0.5 * self.sigma ** 2) * T) / (self.sigma * np.sqrt(T));
+        d2 = (np.log(S0 / K) + (self.mu -self.delta - 0.5 * self.sigma ** 2) * T) / (self.sigma * np.sqrt(T));
+        
+        return K * np.exp(-self.mu * T) * norm.cdf(-d2, 0.0, 1.0)  - S0 *np.exp(-self.delta * (T-t)) * norm.cdf(-d1, 0.0, 1.0)
+        
+        # return self.BS_call_price(S0, K, T, t) - S0 + K*np.exp(-self.mu*(T-t)) + S0 * (1 - np.exp(-self.delta*(T-t)))
     
     def obj_fun(self, params, data):
         
