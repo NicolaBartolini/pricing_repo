@@ -10,9 +10,8 @@ import pandas as pd
 import yfinance as yf
 # from datetime import datetime
 from scipy.stats import norm
-# from copy import copy
+from copy import copy
 from math import pi
-# from numerical_methods import bisection_method, newton_method
 import scipy.special
 from scipy.special import laguerre
 
@@ -123,79 +122,76 @@ def Vega(S0, K, T, mu, sigma):
     return S0 * gaussian_kernel(d1) * np.sqrt(T)
 
     
-# def implied_vol(K, T, C0, S0, sigma1, sigma2, r, t=0, tol=1e-5, maxiter=100):
-#     # This method compute the precise implied volatility by bisection method
-    
-#     # C0 = observed market premium of the call option
-#     # S0 = observed value of the underlying at time zero
-#     # r = constant interest rate
-#     # t = initial time 
-#     # tol = tollerance
-    
-#     # K = strike;
-#     # T = maturity;
-    
-#     call_price1 = BS_call_price(K, T, r, sigma1, S0);
-#     call_price2 = BS_call_price(K, T, r, sigma2, S0);
-    
-#     new_sigma1 = copy(sigma1);
-#     new_sigma2 = copy(sigma2);
-    
-#     count = 0
-    
-#     while call_price1>C0 and count<20:
+def implied_vol(K, T, C0, S0, sigma1, sigma2, r, t=0, tol=1e-5, maxiter=100):
         
-#         if count==20:
-#             return np.nan
-        
-#         new_sigma1 = new_sigma1/2;
-#         call_price1 = BS_call_price(K, T, r, new_sigma1, S0);
-        
-#         count += 1
-        
-#     count = 0
+    # C0 = observed market premium of the call option
+    # S0 = observed value of the underlying at time zero
+    # r = constant interest rate
+    # t = initial time 
+    # tol = tollerance
     
-#     while call_price2<C0:
-        
-#         if count==20:
-#             return np.nan
-        
-#         new_sigma2 = new_sigma2 * 2;
-#         call_price2 = BS_call_price(K, T, r, new_sigma2, S0);
-        
-#         count += 1
-        
-#     if call_price1 == np.nan or call_price2==np.nan:
-#         return np.nan
-        
-#     sigma_med = 0.5 * (new_sigma1 + new_sigma2);
+    # K = strike;
+    # T = maturity;
     
-#     new_call_price = BS_call_price(K, T, r, sigma_med, S0);
+    call_price1 = BS_call_price(K, T, r, sigma1, S0);
+    call_price2 = BS_call_price(K, T, r, sigma2, S0);
     
-#     abs_diff = abs(new_call_price-C0);
+    new_sigma1 = copy(sigma1);
+    new_sigma2 = copy(sigma2);
     
-#     count = 0
-#     while abs_diff>=tol and count<maxiter:
+    count = 0
+    
+    while call_price1>C0 and count<20:
         
-#         if new_call_price>C0:
+        if count==20:
+            return np.nan
+        
+        new_sigma1 = new_sigma1/2;
+        call_price1 = BS_call_price(K, T, r, new_sigma1, S0);
+        
+        count += 1
+        
+    count = 0
+    
+    while call_price2<C0:
+        
+        if count==20:
+            return np.nan
+        
+        new_sigma2 = new_sigma2 * 2;
+        call_price2 = BS_call_price(K, T, r, new_sigma2, S0);
+        
+        count += 1
+        
+    if call_price1 == np.nan or call_price2==np.nan:
+        return np.nan
+        
+    sigma_med = 0.5 * (new_sigma1 + new_sigma2);
+    
+    new_call_price = BS_call_price(K, T, r, sigma_med, S0);
+    
+    abs_diff = abs(new_call_price-C0);
+    
+    count = 0
+    while abs_diff>=tol and count<maxiter:
+        
+        if new_call_price>C0:
             
-#             new_sigma2 = copy(sigma_med)
-#             sigma_med = 0.5 * (new_sigma1 + new_sigma2);
+            new_sigma2 = copy(sigma_med)
+            sigma_med = 0.5 * (new_sigma1 + new_sigma2);
         
-#         elif new_call_price<C0:
+        elif new_call_price<C0:
             
-#             new_sigma1 = copy(sigma_med)
-#             sigma_med = 0.5 * (new_sigma1 + new_sigma2);
+            new_sigma1 = copy(sigma_med)
+            sigma_med = 0.5 * (new_sigma1 + new_sigma2);
             
-#         new_call_price = BS_call_price(K, T, r, sigma_med, S0);
+        new_call_price = BS_call_price(K, T, r, sigma_med, S0);
         
-#         abs_diff = abs(new_call_price-C0);
+        abs_diff = abs(new_call_price-C0);
         
-#         count += 1 
+        count += 1 
     
-#     return sigma_med
-
-
+    return sigma_med
 
 
 class VanillaOption:
@@ -293,45 +289,6 @@ class Time_series_derivatives:
     
 
 
-
-if __name__=='__main__':
-    
-    symbol = 'AAPL'
-    
-    # Fetch data for the ticker
-    stock_data = yf.download(symbol, period='10y', group_by='ticker')
-    
-    data = OptionsRetriever(symbol).dropna()
-    
-    list_of_options = []
-    
-    for i in range(1, len(data)):
-        
-        try:
-            option = VanillaOption(market_price=data.loc[i,'lastPrice'],
-                                   strike_price=data.loc[i,'strike'],
-                                   contract_ticker=data.loc[i,'contractSymbol'],
-                                   maturity_date=data.loc[i,'expiry_date'],
-                                   time_to_maturity=data.loc[i,'time_to_maturity'],
-                                   underlying_ticker=data.loc[i,'underlyingSymbol'],
-                                   typology=data.loc[i,'optionType'],
-                                   style='E',
-                                   trading_date=data.loc[i,'lastTradeDate'],
-                                   underlying_price=stock_data[symbol].loc[data.loc[i,'lastTradeDate'], 'Close'])
-            
-            list_of_options.append(option)
-        
-        except:
-            pass
-                
-    
-    K = 1
-    T = .5
-    price = .1
-    
-    option = VanillaOption(strike_price=K)
-    option2 = VanillaOption(T)
-    
 
 
 ################### Monte-Carlo furmulas for option pricing ###################
@@ -442,59 +399,40 @@ def AmericanOption(S, K, r, T, exercise_date, payout=-1, degree=3, basis='Laguer
     return np.mean(cashflow * np.exp(-r * dt))
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# if __name__=='__main__':
+    
+#     symbol = 'AAPL'
+    
+#     # Fetch data for the ticker
+#     stock_data = yf.download(symbol, period='10y', group_by='ticker')
+    
+#     data = OptionsRetriever(symbol).dropna()
+    
+#     list_of_options = []
+    
+#     for i in range(1, len(data)):
+        
+#         try:
+#             option = VanillaOption(market_price=data.loc[i,'lastPrice'],
+#                                    strike_price=data.loc[i,'strike'],
+#                                    contract_ticker=data.loc[i,'contractSymbol'],
+#                                    maturity_date=data.loc[i,'expiry_date'],
+#                                    time_to_maturity=data.loc[i,'time_to_maturity'],
+#                                    underlying_ticker=data.loc[i,'underlyingSymbol'],
+#                                    typology=data.loc[i,'optionType'],
+#                                    style='E',
+#                                    trading_date=data.loc[i,'lastTradeDate'],
+#                                    underlying_price=stock_data[symbol].loc[data.loc[i,'lastTradeDate'], 'Close'])
+            
+#             list_of_options.append(option)
+        
+#         except:
+#             pass
+                
+    
+#     K = 1
+#     T = .5
+#     price = .1
+    
+#     option = VanillaOption(strike_price=K)
+#     option2 = VanillaOption(T)
