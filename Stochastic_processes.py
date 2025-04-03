@@ -128,10 +128,10 @@ class GBM:
         
         dt = T/n_steps
         
-        St = np.empty((n_steps, n))
+        St = np.empty((n_steps+1, n))
         St[0] = S0
         
-        for i in range(1, n_steps):
+        for i in range(1, n_steps+1):
             
             if n==1:
                 noise = np.random.normal(0, 1, 1)
@@ -328,12 +328,12 @@ class Merton:
         
         dt = T/n_steps
         
-        St = np.empty((n_steps, n))
+        St = np.empty((n_steps+1, n))
         St[0] = S0
         
         compensator = -self.lambda_jump * dt * (np.exp(self.mu_jump+.5*self.sigma_jump**2) - 1)
         
-        for i in range(1, n_steps):
+        for i in range(1, n_steps+1):
             
             if n==1:
                 noise = np.random.normal(0, 1, 1)
@@ -417,8 +417,8 @@ class Heston93:
             n = 2**N;
             dt = T/n_steps;
             
-            X_trj = np.empty((n_steps, n));
-            vol_trj = np.empty((n_steps, n));
+            X_trj = np.empty((n_steps+1, n));
+            vol_trj = np.empty((n_steps+1, n));
             
             X_trj[0] = X0;
             vol_trj[0] = nu0;
@@ -433,7 +433,7 @@ class Heston93:
                 X_noise = np.random.normal(0,1, (n_steps-1, int(n/2)));
                 X_noise = np.hstack((X_noise,-X_noise))
             
-            for i in np.arange(1,n_steps):
+            for i in np.arange(1, n_steps+1):
                 
                 nu = vol_trj[i-1] + k * (theta - vol_trj[i-1]) * dt + sigma * np.sqrt(vol_trj[i-1] * dt) * vol_noise[i-1];
                 nu[nu<0] = 0;
@@ -462,7 +462,7 @@ class Heston93:
             # vol_noise = noise[:,0:n]; # taking the first uniform observations for generating the noise for the asset X_trj
             X_noise = noise[:,n:]; # taking the first uniform observations for generating the noise for the volatility vol_trj
             
-            for i in np.arange(1,n_steps): # iterating for each step 
+            for i in np.arange(1, n_steps+1): # iterating for each step 
                 
                 m = cir_conditional_mean(vol_trj[i-1], k, theta, sigma, dt);
                 s_square = cir_conditional_variance(vol_trj[i-1], k, theta, sigma, dt);
@@ -745,18 +745,18 @@ class Bates:
         vol = np.nan;
         
         if n==1:
-            S = np.empty((n_steps, 1));	# where will be stored the trajectory of the principal process 
+            S = np.empty((n_steps+1, 1));	# where will be stored the trajectory of the principal process 
             S[0] = X0;
-            vol = np.empty((n_steps, 1));	# where will be stored the trajectory of the volatility process
+            vol = np.empty((n_steps+1, 1));	# where will be stored the trajectory of the volatility process
             vol[0] = nu0; 
         else:
-            S = np.empty((n_steps, n));	# where will be stored the trajectory of the principal process 
+            S = np.empty((n_steps+1, n));	# where will be stored the trajectory of the principal process 
             S[0] = X0;
             
-            vol = np.empty((n_steps, n));	# where will be stored the trajectory of the volatility process
+            vol = np.empty((n_steps+1, n));	# where will be stored the trajectory of the volatility process
             vol[0] = nu0;
         
-        for j in np.arange(1, n_steps):
+        for j in np.arange(1, n_steps+1):
             
             if n!=1:
             
@@ -1064,10 +1064,10 @@ class VarianceGamma:
         
         compensator = dt/self.nu * np.log(1 - self.nu*self.theta -.5 * self.nu*self.sigma**2)
         
-        Xt = np.empty((n_steps, n))
+        Xt = np.empty((n_steps+1, n))
         Xt[0, :] = np.log(S0)
         
-        for t in range(1, n_steps):
+        for t in range(1, n_steps+1):
             
             gamma_time = np.random.gamma(dt/self.nu, self.nu, n)
             eps = np.random.normal(0, 1, n)
