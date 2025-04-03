@@ -8,11 +8,13 @@ Created on Mon Dec 23 11:58:08 2024
 import numpy as np
 import pandas as pd
 import yfinance as yf
-from datetime import datetime
+# from datetime import datetime
 from scipy.stats import norm
-from copy import copy
+# from copy import copy
 from math import pi
-from numerical_methods import bisection_method, newton_method
+# from numerical_methods import bisection_method, newton_method
+import scipy.special
+from scipy.special import laguerre
 
 
 def process_expiration(symbol, exp_td_str):
@@ -120,99 +122,79 @@ def Vega(S0, K, T, mu, sigma):
     
     return S0 * gaussian_kernel(d1) * np.sqrt(T)
 
+    
+# def implied_vol(K, T, C0, S0, sigma1, sigma2, r, t=0, tol=1e-5, maxiter=100):
+#     # This method compute the precise implied volatility by bisection method
+    
+#     # C0 = observed market premium of the call option
+#     # S0 = observed value of the underlying at time zero
+#     # r = constant interest rate
+#     # t = initial time 
+#     # tol = tollerance
+    
+#     # K = strike;
+#     # T = maturity;
+    
+#     call_price1 = BS_call_price(K, T, r, sigma1, S0);
+#     call_price2 = BS_call_price(K, T, r, sigma2, S0);
+    
+#     new_sigma1 = copy(sigma1);
+#     new_sigma2 = copy(sigma2);
+    
+#     count = 0
+    
+#     while call_price1>C0 and count<20:
+        
+#         if count==20:
+#             return np.nan
+        
+#         new_sigma1 = new_sigma1/2;
+#         call_price1 = BS_call_price(K, T, r, new_sigma1, S0);
+        
+#         count += 1
+        
+#     count = 0
+    
+#     while call_price2<C0:
+        
+#         if count==20:
+#             return np.nan
+        
+#         new_sigma2 = new_sigma2 * 2;
+#         call_price2 = BS_call_price(K, T, r, new_sigma2, S0);
+        
+#         count += 1
+        
+#     if call_price1 == np.nan or call_price2==np.nan:
+#         return np.nan
+        
+#     sigma_med = 0.5 * (new_sigma1 + new_sigma2);
+    
+#     new_call_price = BS_call_price(K, T, r, sigma_med, S0);
+    
+#     abs_diff = abs(new_call_price-C0);
+    
+#     count = 0
+#     while abs_diff>=tol and count<maxiter:
+        
+#         if new_call_price>C0:
+            
+#             new_sigma2 = copy(sigma_med)
+#             sigma_med = 0.5 * (new_sigma1 + new_sigma2);
+        
+#         elif new_call_price<C0:
+            
+#             new_sigma1 = copy(sigma_med)
+#             sigma_med = 0.5 * (new_sigma1 + new_sigma2);
+            
+#         new_call_price = BS_call_price(K, T, r, sigma_med, S0);
+        
+#         abs_diff = abs(new_call_price-C0);
+        
+#         count += 1 
+    
+#     return sigma_med
 
-# def implied_vol1(K, T, C0, S0, r, method, sigma1, sigma2=1, t=0, tol=1e-5, maxiter=100):
-    
-#     f = lambda x: BS_call_price(K, T, r, x, S0, 0)
-#     df = lambda x: Vega(S0, K, T, r, x)
-    
-#     implied_volatility = None
-    
-#     if method=='Newton':
-#         implied_volatility = newton_method(f, df, sigma1, tol, maxiter)
-        
-#     elif method=='Bisection':
-#         implied_volatility = bisection_method(f, sigma1, sigma2, tol, maxiter)
-    
-#     else:
-#         print('Wrong method') 
-    
-#     return implied_volatility
-    
-def implied_vol(K, T, C0, S0, sigma1, sigma2, r, t=0, tol=1e-5, maxiter=100):
-    # This method compute the precise implied volatility by bisection method
-    
-    # C0 = observed market premium of the call option
-    # S0 = observed value of the underlying at time zero
-    # r = constant interest rate
-    # t = initial time 
-    # tol = tollerance
-    
-    # K = strike;
-    # T = maturity;
-    
-    call_price1 = BS_call_price(K, T, r, sigma1, S0);
-    call_price2 = BS_call_price(K, T, r, sigma2, S0);
-    
-    new_sigma1 = copy(sigma1);
-    new_sigma2 = copy(sigma2);
-    
-    count = 0
-    
-    while call_price1>C0 and count<20:
-        
-        if count==20:
-            return np.nan
-        
-        new_sigma1 = new_sigma1/2;
-        call_price1 = BS_call_price(K, T, r, new_sigma1, S0);
-        
-        count += 1
-        
-    count = 0
-    
-    while call_price2<C0:
-        
-        if count==20:
-            return np.nan
-        
-        new_sigma2 = new_sigma2 * 2;
-        call_price2 = BS_call_price(K, T, r, new_sigma2, S0);
-        
-        count += 1
-        
-    if call_price1 == np.nan or call_price2==np.nan:
-        return np.nan
-        
-    sigma_med = 0.5 * (new_sigma1 + new_sigma2);
-    
-    new_call_price = BS_call_price(K, T, r, sigma_med, S0);
-    
-    abs_diff = abs(new_call_price-C0);
-    
-    count = 0
-    while abs_diff>=tol and count<maxiter:
-        
-        if new_call_price>C0:
-            
-            new_sigma2 = copy(sigma_med)
-            sigma_med = 0.5 * (new_sigma1 + new_sigma2);
-        
-        elif new_call_price<C0:
-            
-            new_sigma1 = copy(sigma_med)
-            sigma_med = 0.5 * (new_sigma1 + new_sigma2);
-            
-        new_call_price = BS_call_price(K, T, r, sigma_med, S0);
-        
-        abs_diff = abs(new_call_price-C0);
-        
-        count += 1 
-    
-    return sigma_med
-        
-        
-    
 
 
 
@@ -351,6 +333,113 @@ if __name__=='__main__':
     option2 = VanillaOption(T)
     
 
+
+################### Monte-Carlo furmulas for option pricing ###################
+
+
+###### UTILS ###
+
+def OLS(X,Y):
+    return np.linalg.inv(X.T@X)@X.T@Y 
+
+
+def LaguerreBase(degree, x):
+    
+    result = [] 
+    
+    for i in range(0, degree+1):
+        result.append(laguerre(i)(x))
+    
+    return np.array(result)
+
+def TaylorPoly(degree, x):
+    
+    result = 0
+    
+    for i in range(0, degree+1):
+        if i==0 or i==1:
+            result += x**i 
+        else:
+            result += x**i/scipy.special.gamma(i+1)
+    
+    return result 
+
+def TaylorBase(degree, x):
+    
+    result = [] 
+    
+    for i in range(0, degree+1):
+        result.append(TaylorPoly(i, x))
+    
+    return np.array(result)
+
+
+def EuropeanOption(S_T, T, r, payout=1):
+    
+    # S_T = Underlying price at maturity (T)
+    # K = strike price 
+    # r = risk-free interest rate 
+    # T = Maturity of the Option 
+    # payout = option payoff (1 for Call, -1 for Put) 
+    
+    return np.mean(np.maximum(payout*(S_T - K), 0)) * np.exp(-r*T) 
+
+
+################ American Options
+
+
+def AmericanOption(S, K, r, T, exercise_date, payout=-1, degree=3, basis='Laguerre'):
+    
+    # This function implements the Longstaff-Schwartz algorithm to price 
+    # American options
+    
+    # S = Trajectories of the underlying ate each exercise step
+    # K = strike price 
+    # r = risk-free interest rate 
+    # T = Maturity of the Option 
+    # exercise_date = row numpy array or list with the exercise steps from 0 to maturity 
+    # payout = option payoff (1 for Call, -1 for Put) 
+    # degree = degree of the polynomial bases used for to compute the  
+    #          conditional expectation function (F_t measurable) 
+    #          for the discounted cash flow received at (t+1)
+    # basis = Laguerre or Taylor
+    
+    if len(exercise_date)!=len(S):
+        raise ValueError('length of exercise_date must be equal to length of S')
+        
+    N = len(exercise_date)
+    # dt = T / N
+    payoff = np.maximum( payout*(S-K), 0)  # payout = -1 --> Put option
+                                           # payout = 1 --> Call option
+    # Discounted future cashflows
+    cashflow = payoff[-1, :]
+    
+    for t in range(N-1, 0, -1):
+        
+        dt = exercise_date[t] - exercise_date[t-1]
+        # print(dt)
+        ITM = payoff[t, :] > 0 # array where 
+        X = S[t, ITM]
+        Y = cashflow[ITM] * np.exp(-r * dt)
+        
+        if basis=='Laguerre':
+        # Basis functions: Laguerre polynomials
+            A = LaguerreBase(degree, X).T
+        elif basis=='Taylor':
+            A = TaylorBase(degree, X).T
+        else:
+            raise ValueError('Wrong basis. Only Laguerre or Taylor')
+        
+        beta = OLS(A, Y)
+        C_t = A @ beta # E[Y|X]
+        
+        exercise = payoff[t, ITM] > C_t # where E[Y|X] > payoff at time t
+        
+        cashflow[ITM] = np.where(exercise, payoff[t, ITM], cashflow[ITM] * np.exp(-r * dt))
+    
+    dt = exercise_date[1] - exercise_date[0]
+    
+    return np.mean(cashflow * np.exp(-r * dt))
 
 
 
