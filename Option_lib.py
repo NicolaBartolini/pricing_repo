@@ -374,7 +374,7 @@ def TaylorBase(degree, x):
     return np.array(result)
 
 
-def EuropeanOption(S_T, T, r, payout=1):
+def EuropeanOption(S_T, K, T, r, payout=1):
     
     # S_T = Underlying price at maturity (T)
     # K = strike price 
