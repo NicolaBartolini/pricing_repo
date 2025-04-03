@@ -19,6 +19,26 @@ from time import time
 
 # Utils
 
+def select_exercise_prices(St, exercise_dates, n_steps):
+    """
+    Selects only the stock prices corresponding to the exercise dates.
+
+    Parameters:
+        St (np.array): Array of simulated stock prices of shape (n_steps + 1, n).
+        exercise_dates (list): List of exercise dates as fractions of total time.
+        n_steps (int): Total number of time steps.
+
+    Returns:
+        np.array: Extracted prices corresponding to the exercise dates.
+    """
+    # Compute indices safely within bounds
+    exercise_indices = [min(round(date * n_steps), n_steps - 1) for date in exercise_dates]
+    
+    # Select the corresponding rows
+    St_exercise = St[exercise_indices, :]
+
+    return St_exercise
+
 def gaussian_kernel(x):
     return np.sqrt(2*pi) * np.exp(-.5 * x**2)
 
