@@ -5,8 +5,19 @@ Created on Thu Feb 27 11:47:44 2025
 @author: Nicola
 """
 
+# import os
+
+# # Set number of CPU threads before importing TensorFlow
+# num_threads = os.cpu_count()  # Get total available CPU cores
+# os.environ["OMP_NUM_THREADS"] = str(num_threads)
+# os.environ["TF_NUM_INTEROP_THREADS"] = str(num_threads)
+# os.environ["TF_NUM_INTRAOP_THREADS"] = str(num_threads)
+
+
 import numpy as np
-import keras
+from tensorflow import keras
+import tensorflow as tf 
+
 # from keras.models import Sequential
 from keras.layers import Activation, Dense, Input, BatchNormalization
 from keras.optimizers import RMSprop, Adam, SGD
@@ -14,6 +25,14 @@ from keras.callbacks import LearningRateScheduler
 from keras.initializers import GlorotUniform, GlorotNormal
 from scipy.stats import qmc
 
+# # Enable TensorFlow to use all available CPU cores
+# num_threads = os.cpu_count()  # Get the number of available CPU cores
+# tf.config.threading.set_intra_op_parallelism_threads(num_threads)
+# tf.config.threading.set_inter_op_parallelism_threads(num_threads)
+# tf.config.optimizer.set_jit(True)  # Enable XLA optimization
+
+# Enable XLA Optimization
+# tf.config.optimizer.set_jit(True)
 
 def NN_generator(InputShape, nLayers, nNodes, activationFun='relu', loss='mse', optimizer='rmsprop', LR=0.001, lr_scheduler=None, BatchNorm=0, show=1):
     
