@@ -971,60 +971,6 @@ class Bates:
         return result
     
     
-    def obj_fun_implied_vol(self, params, data, alpha=1.5):
-        
-        k = params[0]
-        theta = params[1]
-        sigma = params[2]
-        rho = params[3]
-        lam = params[4]
-        sigmaj = params[5]
-        nu0 = params[6]
-        
-        self.set_kappa(k)
-        self.set_theta(theta)
-        self.set_rho(rho)
-        self.set_sigma(sigma)
-        self.set_lambda(lam)
-        self.set_sigmaj(sigmaj)
-        
-        model_implied_vol = []
-        mkt_implied_vol = []
-        
-        for item in data:
-            for option in item:
-            
-                X0 = option.underlying_price
-                K = option.strike_price
-                T = option.time_to_maturity
-                option_type = option.typology
-                v = option.implied_vol
-                
-                if option_type=='C':
-                    
-                    model_price = self.Fourier_call_pricing(K, T, X0, nu0, alpha, 0)
-                    
-                    mkt_implied_vol = v
-                    
-                    model_implied_vol.append(implied_vol(K, T, model_price, X0, .0001, 1, self.mu))
-                
-                elif option_type=='P':
-                    
-                    model_price = self.Fourier_put_pricing(K, T, X0, nu0, alpha, 0)
-                    
-                    mkt_implied_vol = v
-                    
-                    model_implied_vol.append(implied_vol(K, T, model_price, X0, .0001, 1, self.mu))
-        
-        
-        model_implied_vol = np.array(model_implied_vol)
-        mkt_implied_vol = np.array(mkt_implied_vol)
-        
-        result = np.sum((mkt_implied_vol - model_implied_vol)**2)
-        
-        return result
-    
-    
     def calibrate(self, params, data, method='L-BFGS-B'):
         
         bounds = Bounds([0, 0, 0, -1, 0, 0, 0], [np.inf, np.inf, np.inf, 1, np.inf, np.inf, np.inf])
@@ -1243,292 +1189,510 @@ class VarianceGamma:
         self.theta = theta
         
         return FitResult(df, res.fun)
+
+
+############### Commodity processes 
+
+
+class GBMSD:
     
+    def __init__(self, r=np.nan, sigma=np.nan, alpha=np.nan, theta=np.nan, eta=np.nan, rho=np.nan, **kwargs):
+        
+        default_inputs = {'r':r,
+                          'sigma':sigma,
+                          'alpha':alpha,
+                          'theta':theta,
+                          'eta':eta,
+                          'rho':rho}
+        
+        for key in kwargs.keys():
+
+            if key in default_inputs.keys():
+                default_inputs[key] = kwargs[key]
+            else:
+                raise Exception(key, 'is not a correct input')
+                
+        self.r = default_inputs['r']
+        self.sigma = default_inputs['sigma']
+        self.alpha = default_inputs['alpha']
+        self.theta = default_inputs['theta']
+        self.eta = default_inputs['eta']
+        self.rho = default_inputs['rho']
+
+    def simulate(self, S0, delta0, T, n_steps, N=0):
+        
+        n = int(2**N)
+        
+        dt = T/n_steps
+        
+        St = np.empty((n_steps, n))
+        St[0] = S0
+        
+        delta_t = np.empty((n_steps, n))
+        delta_t[0] = delta0
+        
+        # int_delta_t = np.empty((n_steps, n))
+        # int_delta_t[0] = delta0
+        
+        chol_Sigma = np.array([[1, 0],
+                               [self.rho, np.sqrt(1 - self.rho**2)]])
+        
+        for i in range(1, n_steps):
+            
+            if n==1:
+                noise = chol_Sigma @ np.random.normal(0, 1, (2,1))
+            else:
+                noise = np.random.normal(0, 1, (2,int(n/2)))
+                noise = np.hstack((noise, -noise))
+                noise = chol_Sigma @ noise
+            
+            delta_t[i] = delta_t[i-1] + self.alpha * (self.theta - delta_t[i-1]) * dt + self.eta * np.sqrt(dt) * noise[1,:]
+            
+            A =  delta_t[i-1]/self.alpha * (1 - np.exp(-self.alpha * dt))
+            B = self.theta*(dt + 1/self.alpha * (np.exp(-self.alpha*dt) -1))
+            
+            V = dt + 1/(2*self.alpha) * (1 - np.exp(-2*self.alpha * dt)) - 2/self.alpha * (1-np.exp(-self.alpha * dt))
+            C = np.sqrt(np.abs(V)) * noise[1,:]
+            
+            int_delta = A + B + C
+            
+            St[i] = St[i-1] * np.exp((self.r -.5*self.sigma**2)*dt + int_delta + self.sigma*np.sqrt(dt) * noise[0,:])
+        
+        return St
+    
+    def mc_call_pricing(self, S0, delta0,  n_steps, K, T, N=0):
+        
+        trj = self.simulate(S0, delta0, T, n_steps, N); # Generating the trajectories of the asset
+        call_payoff = trj[-1] - K;
+        call_payoff[call_payoff<0] = 0;
+        call_payoff = call_payoff*np.exp(-self.r * T)
+        
+        return np.mean(call_payoff);
+    
+    def mc_put_pricing(self, n_steps, K, T, S0, delta0, t=0, N=0):
+        
+        return self.mc_call_pricing(S0,  n_steps, K, T, N) - S0 + K*np.exp(-self.r*(T-t))
+    
+    def compute_Future(self, S0, delta0, n_steps, N, T):
+        return np.mean(self.simulate(S0, delta0, T, n_steps, N)[-1])
+
+    def FutureOption(self, S0, delta0, K, Tfut, Topt, n_steps, N, t=0):
+        
+        F = self.compute_Future(S0, delta0, n_steps, N, Tfut)
+        
+        return self.mc_call_pricing(F, delta0,  n_steps, K, Topt, N)
+    
+    
+class Heston93SD:
+    
+    def __init__(self, r=np.nan, k=np.nan, nu_hat=np.nan, sigma=np.nan, rho1=np.nan,
+                 alpha=np.nan, theta=np.nan, eta=np.nan, rho2=np.nan, rho3=0, **kwargs):
+        
+        default_inputs = {'r':r,
+                          'sigma':sigma,
+                          'k':k,
+                          'nu_hat':nu_hat,
+                          'sigma':sigma,
+                          'rho1':rho1,
+                          'alpha':alpha,
+                          'theta':theta,
+                          'eta':eta,
+                          'rho2':rho2,
+                          'rho3':rho3}
+        
+        for key in kwargs.keys():
+
+            if key in default_inputs.keys():
+                default_inputs[key] = kwargs[key]
+            else:
+                raise Exception(key, 'is not a correct input')
+                
+        self.r = default_inputs['r']
+        self.k = default_inputs['k']
+        self.nu_hat = default_inputs['nu_hat']
+        self.sigma = default_inputs['sigma']
+        self.rho1 = default_inputs['rho1'] # correlation commodity-vol
+        self.alpha = default_inputs['alpha']
+        self.theta = default_inputs['theta']
+        self.eta = default_inputs['eta']
+        self.rho2 = default_inputs['rho2'] # correlation commodity convenience yield
+        self.rho3 = default_inputs['rho3'] # correlation vol convenience yield
+        
+    
+    def simulate(self, S0, nu0, delta0, T, n_steps, N=0):
+        
+        n = int(2**N)
+        
+        dt = T/n_steps
+        
+        St = np.empty((n_steps, n))
+        St[0] = S0
+        
+        delta_t = np.empty((n_steps, n))
+        delta_t[0] = delta0
+        
+        nu_t = np.empty((n_steps, n))
+        nu_t[0] = nu0
+        
+        # int_delta_t = np.empty((n_steps, n))
+        # int_delta_t[0] = delta0
+        
+        Sigma = np.array([[1, self.rho3, self.rho1],
+                          [self.rho3, 1, self.rho2],
+                          [self.rho1, self.rho2, 1]])
+        
+        # Sigma = np.array([[1, 0, self.rho1],
+        #                   [0, 1, self.rho2],
+        #                   [self.rho1, self.rho2, 1]])
+        
+        try:
+            chol_Sigma = np.linalg.cholesky(Sigma)
+        except:
+            E, P = np.linalg.eig(Sigma)
+            E[E<0] = 0
+            chol_Sigma = P @ np.sqrt(np.diag(E))
+        else:
+            E, P = np.linalg.eig(Sigma)
+            chol_Sigma = P @ np.sqrt(np.abs(np.diag(E)))
+            
+        # chol_Sigma = np.array([[1, 0, 0],
+        #                        [np.sqrt(self.rho1), ],
+        #                        []])
+        
+        for i in range(1, n_steps):
+            
+            if n==1:
+                noise = chol_Sigma @ np.random.normal(0, 1, (3,1))
+            else:
+                noise = np.random.normal(0, 1, (3,int(n/2) ))
+                noise = np.hstack((noise, -noise))
+                noise = chol_Sigma @ noise
+            
+            v = nu_t[i-1] + self.k * (self.nu_hat - nu_t[i-1]) * dt + self.sigma * np.sqrt(dt) * noise[0,:]
+            v[v<0] = 0
+            nu_t[i] = v
+            
+            delta_t[i] = delta_t[i-1] + self.alpha * (self.theta - delta_t[i-1]) * dt + self.eta * np.sqrt(dt) * noise[2,:]
+            
+            A =  delta_t[i-1]/self.alpha * (1 - np.exp(-self.alpha * dt))
+            B = self.theta*(dt + 1/self.alpha * (np.exp(-self.alpha*dt) -1))
+            
+            V = dt + 1/(2*self.alpha) * (1 - np.exp(-2*self.alpha * dt)) - 2/self.alpha * (1-np.exp(-self.alpha * dt))
+            C = np.sqrt(np.abs(V)) * noise[1,:]
+            
+            int_delta = A + B + C
+            
+            St[i] = St[i-1] * np.exp((self.r -.5*nu_t[i-1])*dt + int_delta + np.sqrt(dt*nu_t[i-1]) * noise[1,:])
+        
+        return St
+    
+    def mc_call_pricing(self, S0, nu0, delta0,  n_steps, K, T, N=0):
+        
+        trj = self.simulate(S0, nu0, delta0, T, n_steps, N); # Generating the trajectories of the asset
+        call_payoff = trj[-1] - K;
+        call_payoff[call_payoff<0] = 0;
+        call_payoff = call_payoff*np.exp(-self.r * T)
+        
+        return np.mean(call_payoff);
+    
+    def mc_put_pricing(self, n_steps, K, T, S0, nu0, delta0, t=0, N=0):
+        
+        return self.mc_call_pricing(S0,  n_steps, K, T, N) - S0 + K*np.exp(-self.r*(T-t))
+    
+    def compute_Future(self, S0, nu0, delta0, n_steps, N, T):
+        return np.mean(self.simulate(S0, nu0, delta0, T, n_steps, N)[-1])
+
+    def FutureOption(self, S0, nu0, delta0, K, Tfut, Topt, n_steps, N, t=0):
+        
+        F = self.compute_Future(S0, nu0, delta0, n_steps, N, Tfut)
+        
+        return self.mc_call_pricing(F, nu0, delta0,  n_steps, K, Topt, N)
+
     
     
     
         
         
-if __name__=='__main__':
+# if __name__=='__main__':
     
-    import matplotlib.pyplot as plt
-    from datetime import datetime
-    from Option_lib import VanillaOption, implied_vol, Time_series_derivatives
+#     import matplotlib.pyplot as plt
+#     from datetime import datetime
+#     from Option_lib import VanillaOption, implied_vol, Time_series_derivatives
     
-    np.random.seed(42)
-    today = datetime.today()
+#     np.random.seed(42)
+#     today = datetime.today()
     
-    # # Testing GBM object
+#     # # Testing GBM object
     
-    # mu = 0 
-    # sigma = .24
-    # S0 = 3
+#     # mu = 0 
+#     # sigma = .24
+#     # S0 = 3
     
-    # n_steps = 10
-    # N = 20
+#     # n_steps = 10
+#     # N = 20
     
-    # T = 1 
+#     # T = 1 
     
-    # model = GBM(mu=mu, sigma=sigma)
+#     # model = GBM(mu=mu, sigma=sigma)
     
-    # St = model.simulate(S0, T, n_steps, N)
+#     # St = model.simulate(S0, T, n_steps, N)
         
-    # print(np.mean(St, axis=1))
-    # print()
+#     # print(np.mean(St, axis=1))
+#     # print()
     
-    # # pricing call option 
+#     # # pricing call option 
     
-    # K = 3
+#     # K = 3
     
-    # mc_call_price = model.mc_call_pricing(S0, n_steps, K, T, N)
-    # bs_call_price = model.BS_call_price(S0, K, T)
-    # fr_call_price = model.Fourier_call_pricing(S0, K, T)
+#     # mc_call_price = model.mc_call_pricing(S0, n_steps, K, T, N)
+#     # bs_call_price = model.BS_call_price(S0, K, T)
+#     # fr_call_price = model.Fourier_call_pricing(S0, K, T)
     
-    # print(bs_call_price)
-    # print(mc_call_price)
-    # print(fr_call_price)
-    # print()
+#     # print(bs_call_price)
+#     # print(mc_call_price)
+#     # print(fr_call_price)
+#     # print()
     
-    # maturities = np.array([1/252, 5/252, 21/252, 42/252, 63/252, 84/252, 126/252])
-    # strikes = np.arange(2.5, 3.6, step=.1)
+#     # maturities = np.array([1/252, 5/252, 21/252, 42/252, 63/252, 84/252, 126/252])
+#     # strikes = np.arange(2.5, 3.6, step=.1)
     
-    # mkt_data = []
-    # mkt_implied_vol = []
+#     # mkt_data = []
+#     # mkt_implied_vol = []
     
-    # Options = Time_series_derivatives()
+#     # Options = Time_series_derivatives()
     
-    # P = 0
+#     # P = 0
     
-    # today = datetime.today()
+#     # today = datetime.today()
     
-    # for T in maturities:
-    #     for K in strikes:
+#     # for T in maturities:
+#     #     for K in strikes:
             
-    #         call_price = model.BS_call_price(S0, K, T)
-    #         mkt_data.append([call_price, S0, K, T, 'C'])
+#     #         call_price = model.BS_call_price(S0, K, T)
+#     #         mkt_data.append([call_price, S0, K, T, 'C'])
             
-    #         v = implied_vol(K, T, call_price, S0, .001, 1, 0)
-    #         mkt_implied_vol.append([v, S0, K, T, 'C'])
+#     #         v = implied_vol(K, T, call_price, S0, .001, 1, 0)
+#     #         mkt_implied_vol.append([v, S0, K, T, 'C'])
             
-    #         options = VanillaOption(market_price=call_price,
-    #                                 strike_price=K,
-    #                                 time_to_maturity=T,
-    #                                 typology='C',
-    #                                 style='E',
-    #                                 trading_date=today,
-    #                                 underlying_price=S0,
-    #                                 implied_vol=v)
+#     #         options = VanillaOption(market_price=call_price,
+#     #                                 strike_price=K,
+#     #                                 time_to_maturity=T,
+#     #                                 typology='C',
+#     #                                 style='E',
+#     #                                 trading_date=today,
+#     #                                 underlying_price=S0,
+#     #                                 implied_vol=v)
             
-    #         Options.add_contract(options, today)
+#     #         Options.add_contract(options, today)
             
-            # put = model.BS_put_price(S0, K, T)
-            # mkt_data.append([put, S0, K, T, 'P'])
+#             # put = model.BS_put_price(S0, K, T)
+#             # mkt_data.append([put, S0, K, T, 'P'])
         
-    # for item in Options:
-    #     print('hello')
+#     # for item in Options:
+#     #     print('hello')
     
-    # params = np.array([1])
+#     # params = np.array([1])
     
-    # fitted_gbm = GBM(mu=mu)
+#     # fitted_gbm = GBM(mu=mu)
         
-    # res = fitted_gbm.calibrate(params, Options)
+#     # res = fitted_gbm.calibrate(params, Options)
     
     
-    # Testing the Heston model
+#     # Testing the Heston model
     
-    # print('Heston model')
+#     # print('Heston model')
     
-    # mu = 0.0; 			 # deterministic and fixed short rate
-    # k = 1.5;             # speed of mean reversion of the vol process
-    # theta = 0.04;        # long run memory of the vol process
-    # nu0 = 0.04;          # initial value of the vol process
-    # sigma = .2;          # diffusion parameter of the vol process
-    # rho = -0.1;          # correlation of the Brownians (leverage effect)
-    # S0 = 3
+#     # mu = 0.0; 			 # deterministic and fixed short rate
+#     # k = 1.5;             # speed of mean reversion of the vol process
+#     # theta = 0.04;        # long run memory of the vol process
+#     # nu0 = 0.04;          # initial value of the vol process
+#     # sigma = .2;          # diffusion parameter of the vol process
+#     # rho = -0.1;          # correlation of the Brownians (leverage effect)
+#     # S0 = 3
     
-    # model2 = Heston93(mu, k, theta, sigma, rho)
+#     # model2 = Heston93(mu, k, theta, sigma, rho)
     
-    # # # n_steps = 100;
-    # # # # N = 10;
-    # # # N=15;
-    # # # T = 0.25; # number of years
+#     # # # n_steps = 100;
+#     # # # # N = 10;
+#     # # # N=15;
+#     # # # T = 0.25; # number of years
     
-    # # # X0 = 11.75;
-    # # # K = X0
+#     # # # X0 = 11.75;
+#     # # # K = X0
     
-    # # # Xt, nut = model2.simulate(X0, nu0, T, n_steps, N, .5, .5, 'andersen');
+#     # # # Xt, nut = model2.simulate(X0, nu0, T, n_steps, N, .5, .5, 'andersen');
     
-    # # # # print(np.mean(Xt, axis=1))
-    # # # # print()
+#     # # # # print(np.mean(Xt, axis=1))
+#     # # # # print()
     
-    # # # mc_call_price = model2.mc_call_pricing(n_steps, K, T, X0, nu0, 0, N)
-    # # # fr_call_price = model2.Fourier_call_pricing(K, T, X0, nu0)
+#     # # # mc_call_price = model2.mc_call_pricing(n_steps, K, T, X0, nu0, 0, N)
+#     # # # fr_call_price = model2.Fourier_call_pricing(K, T, X0, nu0)
     
-    # # # print(mc_call_price)
-    # # # print(fr_call_price)
-    # # # print()
+#     # # # print(mc_call_price)
+#     # # # print(fr_call_price)
+#     # # # print()
     
-    # maturities = np.array([1/252, 5/252, 21/252, 42/252, 63/252, 84/252, 126/252])
-    # strikes = np.arange(2.5, 3.6, step=.1)
-    # X0 = 3 
+#     # maturities = np.array([1/252, 5/252, 21/252, 42/252, 63/252, 84/252, 126/252])
+#     # strikes = np.arange(2.5, 3.6, step=.1)
+#     # X0 = 3 
     
-    # mkt_data = []
+#     # mkt_data = []
     
-    # Options = Time_series_derivatives()
-    # mkt_data = []
-    # mkt_implied_vol = []
+#     # Options = Time_series_derivatives()
+#     # mkt_data = []
+#     # mkt_implied_vol = []
         
-    # for T in maturities:
-    #     for K in strikes:
+#     # for T in maturities:
+#     #     for K in strikes:
             
-    #         call_price = model2.Fourier_call_pricing(K, T, X0, nu0)
-    #         mkt_data.append([call_price, S0, K, T, 'C'])
+#     #         call_price = model2.Fourier_call_pricing(K, T, X0, nu0)
+#     #         mkt_data.append([call_price, S0, K, T, 'C'])
             
-    #         v = implied_vol(K, T, call_price, S0, .001, 1, 0)
-    #         mkt_implied_vol.append([v, S0, K, T, 'C'])
+#     #         v = implied_vol(K, T, call_price, S0, .001, 1, 0)
+#     #         mkt_implied_vol.append([v, S0, K, T, 'C'])
             
-    #         options = VanillaOption(market_price=call_price,
-    #                                 strike_price=K,
-    #                                 time_to_maturity=T,
-    #                                 typology='C',
-    #                                 style='E',
-    #                                 trading_date=today,
-    #                                 underlying_price=S0,
-    #                                 implied_vol=v)
+#     #         options = VanillaOption(market_price=call_price,
+#     #                                 strike_price=K,
+#     #                                 time_to_maturity=T,
+#     #                                 typology='C',
+#     #                                 style='E',
+#     #                                 trading_date=today,
+#     #                                 underlying_price=S0,
+#     #                                 implied_vol=v)
             
-    #         Options.add_contract(options, today)
+#     #         Options.add_contract(options, today)
             
-    #         # put = model2.BS_put_price(S0, K, T)
-    #         # mkt_data.append([put, S0, K, T, 'P'])
+#     #         # put = model2.BS_put_price(S0, K, T)
+#     #         # mkt_data.append([put, S0, K, T, 'P'])
     
-    # params = np.array([k, theta, sigma, 0, nu0]) * 1.5
+#     # params = np.array([k, theta, sigma, 0, nu0]) * 1.5
     
-    # fitted_heston = Heston93(0)
+#     # fitted_heston = Heston93(0)
     
-    # # fitted_gbm.obj_fun(params, mkt_data)
+#     # # fitted_gbm.obj_fun(params, mkt_data)
     
-    # res = fitted_heston.calibrate(params, Options)
+#     # res = fitted_heston.calibrate(params, Options)
     
     
-    # Testing Bates model 
-    print('Bates')
-    print()
+#     # Testing Bates model 
+#     print('Bates')
+#     print()
     
-    mu = 0.0; 			 # deterministic and fixed short rate
-    k = 1.5;             # speed of mean reversion of the vol process
-    theta = 0.04;       # long run memory of the vol process
-    nu0 = 0.04;          # initial value of the vol process
-    sigma = .2;        # diffusion parameter of the vol process
-    rho = -0.1;         # correlation of the Brownians (leverage effect)
-    muj = 0;
-    sigmaj = 0.002;
-    lam = 1;
+#     mu = 0.0; 			 # deterministic and fixed short rate
+#     k = 1.5;             # speed of mean reversion of the vol process
+#     theta = 0.04;       # long run memory of the vol process
+#     nu0 = 0.04;          # initial value of the vol process
+#     sigma = .2;        # diffusion parameter of the vol process
+#     rho = -0.1;         # correlation of the Brownians (leverage effect)
+#     muj = 0;
+#     sigmaj = 0.002;
+#     lam = 1;
     
-    model3 = Bates(mu, k, theta, sigma, rho, lam, muj, sigmaj)
+#     model3 = Bates(mu, k, theta, sigma, rho, lam, muj, sigmaj)
     
-    # maturities = np.array([1/252, 5/252, 21/252, 42/252, 63/252, 84/252, 126/252])
-    # strikes = np.arange(2.5, 3.6, step=.1)
-    # X0 = 3 
+#     # maturities = np.array([1/252, 5/252, 21/252, 42/252, 63/252, 84/252, 126/252])
+#     # strikes = np.arange(2.5, 3.6, step=.1)
+#     # X0 = 3 
     
-    # mkt_data = []
-    # mkt_implied_vol = []
+#     # mkt_data = []
+#     # mkt_implied_vol = []
     
-    # sigma1 = 0.0001
-    # sigma2 = 1
+#     # sigma1 = 0.0001
+#     # sigma2 = 1
     
-    start = time()
+#     start = time()
         
-    # for T in maturities:
-    #     for K in strikes:
+#     # for T in maturities:
+#     #     for K in strikes:
             
-    #         call = model3.Fourier_call_pricing(K, T, X0, nu0)
-    #         mkt_data.append([call, X0, K, T, 'C'])
+#     #         call = model3.Fourier_call_pricing(K, T, X0, nu0)
+#     #         mkt_data.append([call, X0, K, T, 'C'])
             
-    #         vol = implied_vol(K, T, call, X0, sigma1, sigma2, mu)
-    #         if vol<10**-4:
-    #             continue
-    #         mkt_implied_vol.append([vol, X0, K, T, 'C'])
+#     #         vol = implied_vol(K, T, call, X0, sigma1, sigma2, mu)
+#     #         if vol<10**-4:
+#     #             continue
+#     #         mkt_implied_vol.append([vol, X0, K, T, 'C'])
     
-    maturities = np.array([1/252, 5/252, 21/252, 42/252, 63/252, 84/252, 126/252])
-    strikes = np.arange(2.5, 3.6, step=.1)
-    X0 = 3 
+#     maturities = np.array([1/252, 5/252, 21/252, 42/252, 63/252, 84/252, 126/252])
+#     strikes = np.arange(2.5, 3.6, step=.1)
+#     X0 = 3 
     
-    Options = Time_series_derivatives()
-    mkt_data = []
-    mkt_implied_vol = []
+#     Options = Time_series_derivatives()
+#     mkt_data = []
+#     mkt_implied_vol = []
     
-    D = np.empty((len(maturities), len(strikes)))
+#     D = np.empty((len(maturities), len(strikes)))
     
-    i = 0
-    j = 0 
+#     i = 0
+#     j = 0 
     
-    for T in maturities:
-        for K in strikes:
+#     for T in maturities:
+#         for K in strikes:
             
-            call_price = model3.Fourier_call_pricing(K, T, X0, nu0)
-            mkt_data.append([call_price, X0, K, T, 'C'])
+#             call_price = model3.Fourier_call_pricing(K, T, X0, nu0)
+#             mkt_data.append([call_price, X0, K, T, 'C'])
             
-            v = implied_vol(K, T, call_price, X0, .001, 1, 0)
-            mkt_implied_vol.append([v, X0, K, T, 'C'])
+#             v = implied_vol(K, T, call_price, X0, .001, 1, 0)
+#             mkt_implied_vol.append([v, X0, K, T, 'C'])
             
-            D[i,j] = call_price
+#             D[i,j] = call_price
             
-            options = VanillaOption(market_price=call_price,
-                                    strike_price=K,
-                                    time_to_maturity=T,
-                                    typology='C',
-                                    style='E',
-                                    trading_date=today,
-                                    underlying_price=X0,
-                                    implied_vol=v)
+#             options = VanillaOption(market_price=call_price,
+#                                     strike_price=K,
+#                                     time_to_maturity=T,
+#                                     typology='C',
+#                                     style='E',
+#                                     trading_date=today,
+#                                     underlying_price=X0,
+#                                     implied_vol=v)
             
-            Options.add_contract(options, today)
-            j += 1
-        i+=1 
-        j=0
+#             Options.add_contract(options, today)
+#             j += 1
+#         i+=1 
+#         j=0
     
-    end = time()
+#     end = time()
     
-    print('Elapsed time : '+str(end-start))
+#     print('Elapsed time : '+str(end-start))
     
-    # params = np.array([k, theta, sigma, 0, lam, sigmaj, nu0]) * 1.5
+#     # params = np.array([k, theta, sigma, 0, lam, sigmaj, nu0]) * 1.5
     
-    # fitted_bates = Bates(mu=mu, muj=muj)
+#     # fitted_bates = Bates(mu=mu, muj=muj)
     
-    # # fitted_bates.obj_fun_implied_vol(params, mkt_implied_vol)
+#     # # fitted_bates.obj_fun_implied_vol(params, mkt_implied_vol)
     
-    # start = time()
-    # res = fitted_bates.calibrate(params, Options)
-    # end = time()
-    # print('Elapsed time : '+str(end-start))
+#     # start = time()
+#     # res = fitted_bates.calibrate(params, Options)
+#     # end = time()
+#     # print('Elapsed time : '+str(end-start))
     
-    # # res = fitted_bates.calibrate(params, mkt_implied_vol, target='vol')
+#     # # res = fitted_bates.calibrate(params, mkt_implied_vol, target='vol')
         
-    # # test = model3.Damping_integrand(K, T, np.arange(0,10), 1.5)
+#     # # test = model3.Damping_integrand(K, T, np.arange(0,10), 1.5)
     
-    # # plt.plot(test,'-o')
-    # # plt.show()
+#     # # plt.plot(test,'-o')
+#     # # plt.show()
     
-    # # X0 = 5.75;
-    # # K = X0
+#     # # X0 = 5.75;
+#     # # K = X0
     
-    # # N = 15;
-    # # n_steps = 100;
-    # # T = 0.25;
+#     # # N = 15;
+#     # # n_steps = 100;
+#     # # T = 0.25;
     
-    # # model3 = Bates(mu, k, theta, sigma, rho, lam, muj, sigmaj)
+#     # # model3 = Bates(mu, k, theta, sigma, rho, lam, muj, sigmaj)
     
-    # # Xt, nut = model3.simulate(X0, nu0, n_steps, T, N);
+#     # # Xt, nut = model3.simulate(X0, nu0, n_steps, T, N);
     
-    # # # print(np.mean(Xt, axis=1))
-    # # # print()
+#     # # # print(np.mean(Xt, axis=1))
+#     # # # print()
      
-    # # mc_call_price = model3.mc_call_pricing(T, K, n_steps, N, X0, nu0)
-    # # fr_call_price = model3.Fourier_call_pricing(K, T, X0, nu0)
+#     # # mc_call_price = model3.mc_call_pricing(T, K, n_steps, N, X0, nu0)
+#     # # fr_call_price = model3.Fourier_call_pricing(K, T, X0, nu0)
     
-    # # print(mc_call_price)
-    # # print(fr_call_price)
-    # # print()
+#     # # print(mc_call_price)
+#     # # print(fr_call_price)
+#     # # print()
         
         
         
