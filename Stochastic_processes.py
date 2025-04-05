@@ -444,13 +444,13 @@ class Heston93:
             vol_trj[0] = nu0;
             
             if n==0:
-                X_noise = np.random.normal(0,1, (n_steps-1, 1));
-                vol_noise = np.random.normal(0,1, (n_steps-1, 1));
+                X_noise = np.random.normal(0,1, (n_steps, 1));
+                vol_noise = np.random.normal(0,1, (n_steps, 1));
             else:
-                vol_noise = np.random.normal(0,1, (n_steps-1, int(n/2)));
+                vol_noise = np.random.normal(0,1, (n_steps, int(n/2)));
                 vol_noise = np.hstack((vol_noise,-vol_noise))
                 
-                X_noise = np.random.normal(0,1, (n_steps-1, int(n/2)));
+                X_noise = np.random.normal(0,1, (n_steps, int(n/2)));
                 X_noise = np.hstack((X_noise,-X_noise))
             
             for i in np.arange(1, n_steps+1):
@@ -469,13 +469,13 @@ class Heston93:
             n = 2**N;
             dt = T/n_steps;
             
-            X_trj = np.empty((n_steps, n)); # array containing the simulations of the asset. Each column is a Monte-Carlo simulation
-            vol_trj = np.empty((n_steps, n)); # array containing the simulations of the volatility. Each column is a Monte-Carlo simulation
+            X_trj = np.empty((n_steps+1, n)); # array containing the simulations of the asset. Each column is a Monte-Carlo simulation
+            vol_trj = np.empty((n_steps+1, n)); # array containing the simulations of the volatility. Each column is a Monte-Carlo simulation
             
             X_trj[0] = X0;
             vol_trj[0] = nu0;
             
-            noise = np.random.uniform(0,1,(n_steps-1, 2*n)); # generating the noise from a uniform distribution 
+            noise = np.random.uniform(0,1,(n_steps, 2*n)); # generating the noise from a uniform distribution 
             
             uniform_sampling = noise[:,0:n];
             
@@ -625,7 +625,7 @@ class Heston93:
         
         return V_COS
     
-    def obj_fun(self, params, data, alpha=1.5):
+    def obj_fun(self, params, data, alpha=1.5, N=50, way=1):
         
         k = params[0]
         theta = params[1]
@@ -651,7 +651,13 @@ class Heston93:
                 
                 if option_type=='C':
                     
-                    model_prices.append(self.Fourier_call_pricing(K, T, X0, nu0, alpha, 0))
+                    if way==0:
+                        model_prices.append(self.Fourier_call_pricing(K, T, X0, nu0, alpha, 0))
+                    elif way==1:
+                        model_prices.append(self.cos_pricing(X0, nu0, K, T, 'call', N))
+                    else:
+                        raise ValueError('way is 0 (for damping method) or 1 for (cos method)' )
+                    
                     mkt_prices.append(option.market_price)
                     
                 elif option_type=='P':
@@ -667,12 +673,12 @@ class Heston93:
         
         return result
     
-    def calibrate(self, params, data, method='L-BFGS-B'):
+    def calibrate(self, params, data, method='L-BFGS-B', way=0, alpha=1.5, N=50):
         
         bounds = Bounds([0, 0, 0, -1, 0], [np.inf, np.inf, np.inf, 1, np.inf])
         
         res = minimize(self.obj_fun, params, bounds=bounds, method=method, 
-                       args=(data), jac='2-points')
+                       args=(data, alpha, N, way), jac='2-points')
         
         index = ['k', 'theta', 'sigma', 'rho', 'nu0']
         columns = ['params','gradient']
