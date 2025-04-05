@@ -344,6 +344,25 @@ def EuropeanOption(S_T, K, T, r, payout=1):
 
 ################ American Options
 
+def select_exercise_prices(St, exercise_dates, n_steps):
+    
+    # Extracts the asset prices from simulated paths (St) at specified exercise dates.
+    # St : np.ndarray simulated asset prices trajectories (n_steps + 1, n_paths).
+    # exercise_dates : list or numpy array of float with exercise dates as year fractions
+    # n_steps : int, number of time steps used in simulation.
+    
+    # Convert exercise dates into indices on the time grid
+    time_indices = [round(date * n_steps) for date in exercise_dates]
+
+    # Handle out-of-bounds safely
+    time_indices = [min(idx, St.shape[0] - 1) for idx in time_indices]
+
+    # Select the corresponding time steps from St
+    St_exercise = St[time_indices, :]
+
+    return St_exercise
+
+
 
 def AmericanOption(S, K, r, T, exercise_date, payout=-1, degree=3, basis='Laguerre'):
     
