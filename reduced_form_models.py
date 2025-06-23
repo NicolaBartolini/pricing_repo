@@ -104,7 +104,7 @@ def risky_zcb2(k1, theta1, sigma1, gamma1,
               k2, theta2, sigma2, gamma2, beta2,
               k3, theta3, sigma3, gamma3, beta3, 
               T, DF, delta):
-    survival_prob = CIR_factor(gamma1, theta1, k1, sigma1, T, 0) * CIR_factor(beta2*gamma2, beta2*theta2, k2, beta2*sigma2, T, 0) * CIR_factor(beta3*gamma3, beta3*theta3, k3, beta3*sigma3, T, 0) ;
+    survival_prob = CIR_factor(gamma1, theta1, k1, sigma1, T, 0) * CIR_factor(beta2*gamma2, beta2*theta2, k2, np.sqrt(beta2)*sigma2, T, 0) * CIR_factor(beta3*gamma3, beta3*theta3, k3, np.sqrt(beta3)*sigma3, T, 0) ;
 
     return DF * survival_prob + delta*(1-survival_prob)*DF;
 
@@ -113,7 +113,7 @@ def risky_zcb21(k1, theta1, sigma1, gamma1,
               k3, theta3, sigma3, gamma3, beta3, 
               T, DF, delta):
     
-    survival_prob = CIR_factor(gamma1, theta1, k1, sigma1, T, 0) * CIR_factor(beta3*gamma3, beta3*theta3, k3, beta3*sigma3, T, 0) * Levy_OU_factor(alpha1, lam1, eta1, x1, beta1, T, 0); 
+    survival_prob = CIR_factor(gamma1, theta1, k1, sigma1, T, 0) * CIR_factor(beta3*gamma3, beta3*theta3, k3, np.sqrt(beta3)*sigma3, T, 0) * Levy_OU_factor(alpha1, lam1, eta1, x1, beta1, T, 0); 
 
     return DF * survival_prob + delta*(1-survival_prob)*DF;
 
@@ -142,7 +142,7 @@ def risky_zcb314(k1, theta1, sigma1, gamma1, # 2 weather Lévys, 1 CIR
               x4, alpha4, lam4, eta4, beta4,
               T, DF, delta):
     
-    survival_prob = CIR_factor(gamma1, theta1, k1, sigma1, T, 0) * CIR_factor(beta3*gamma3, beta3*theta3, k3, beta3*sigma3, T, 0) * Levy_OU_factor(alpha1, lam1, eta1, x1, beta1, T, 0) *  Levy_OU_factor(alpha4, lam4, eta4, x4, beta4, T, 0); 
+    survival_prob = CIR_factor(gamma1, theta1, k1, sigma1, T, 0) * CIR_factor(beta3*gamma3, beta3*theta3, k3, np.sqrt(beta3)*sigma3, T, 0) * Levy_OU_factor(alpha1, lam1, eta1, x1, beta1, T, 0) *  Levy_OU_factor(alpha4, lam4, eta4, x4, beta4, T, 0); 
 
     return DF * survival_prob + delta*(1-survival_prob)*DF;
 
@@ -154,7 +154,7 @@ def risky_zcb41(k1, theta1, sigma1, gamma1, # 3 weather Lévys, 1 CIR
               x5, alpha5, lam5, eta5, beta5,
               T, DF, delta):
     
-    survival_prob = CIR_factor(gamma1, theta1, k1, sigma1, T, 0) * CIR_factor(beta3*gamma3, beta3*theta3, k3, beta3*sigma3, T, 0) * Levy_OU_factor(alpha1, lam1, eta1, x1, beta1, T, 0) *  Levy_OU_factor(alpha4, lam4, eta4, x4, beta4, T, 0) * Levy_OU_factor(alpha5, lam5, eta5, x5, beta5, T, 0); 
+    survival_prob = CIR_factor(gamma1, theta1, k1, sigma1, T, 0) * CIR_factor(beta3*gamma3, beta3*theta3, k3, np.sqrt(beta3)*sigma3, T, 0) * Levy_OU_factor(alpha1, lam1, eta1, x1, beta1, T, 0) *  Levy_OU_factor(alpha4, lam4, eta4, x4, beta4, T, 0) * Levy_OU_factor(alpha5, lam5, eta5, x5, beta5, T, 0); 
 
     return DF * survival_prob + delta*(1-survival_prob)*DF;
 
