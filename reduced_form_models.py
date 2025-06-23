@@ -47,7 +47,7 @@ def Levy_OU_factor(alpha, lam, eta, x0, beta, T, t=0):
     
     A = quad(fun, t, T)[0];
     
-    return np.exp(A + B * beta*x0);
+    return np.exp(A + B * x0);
 
 
 def risky_zcb(k1, theta1, sigma1, gamma1, 
